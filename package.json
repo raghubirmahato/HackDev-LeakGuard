@@ -1,0 +1,11 @@
+{
+  "name": "hackdev-leakguard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome extension that warns you if a password you type has appeared in a known data breach, using the HaveIBeenPwned k-anonymity API.",
+  "scripts": {
+    "test": "node --test tests/test_pagelogic.js",
+    "test:live": "node --test tests/"
+  },
+  "license": "MIT"
+}

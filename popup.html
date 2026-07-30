@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>HackDev LeakGuard</title>
+<style>
+  body { width: 260px; font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 14px; background: #0f172a; color: #e2e8f0; }
+  h1 { font-size: 15px; margin: 0 0 4px; color: #22c55e; }
+  .sub { color: #94a3b8; margin-bottom: 12px; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid #1e293b; }
+  .stat-value { font-weight: 600; color: #22c55e; }
+  label.switch { position: relative; display: inline-block; width: 38px; height: 20px; }
+  label.switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background: #334155; border-radius: 20px; transition: .2s; }
+  .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .2s; }
+  input:checked + .slider { background: #16a34a; }
+  input:checked + .slider:before { transform: translateX(18px); }
+  a { color: #38bdf8; text-decoration: none; }
+  footer { margin-top: 10px; font-size: 11px; color: #64748b; }
+</style>
+</head>
+<body>
+  <h1>HackDev LeakGuard</h1>
+  <div class="sub">Warns you if a typed password has leaked in a known breach.</div>
+
+  <div class="row">
+    <span>Enabled on this device</span>
+    <label class="switch">
+      <input type="checkbox" id="enabledToggle" />
+      <span class="slider"></span>
+    </label>
+  </div>
+  <div class="row">
+    <span>Passwords checked</span>
+    <span class="stat-value" id="checkedCount">0</span>
+  </div>
+  <div class="row">
+    <span>Breaches flagged</span>
+    <span class="stat-value" id="breachedCount">0</span>
+  </div>
+
+  <footer>
+    Passwords never leave your device — only a 5-character hash prefix is sent to
+    <a href="https://haveibeenpwned.com/API/v3#PwnedPasswords" target="_blank" rel="noopener">HaveIBeenPwned</a>.
+    <br /><a href="options.html" target="_blank">Settings</a>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
