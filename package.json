@@ -5,7 +5,7 @@
   "description": "Chrome extension that warns you if a password you type has appeared in a known data breach, using the HaveIBeenPwned k-anonymity API.",
   "scripts": {
     "test": "node --test tests/test_pagelogic.js",
-    "test:live": "node --test tests/"
+    "test:live": "node --test tests/test_pagelogic.js tests/test_hibp_integration.js"
   },
   "license": "MIT"
 }

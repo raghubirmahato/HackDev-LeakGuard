@@ -51,7 +51,7 @@ test(
   }
 );
 
-test("only the 5-character prefix is ever needed to query the API (k-anonymity holds)", async () => {
+test("only the 5-character prefix is ever needed to query the API (k-anonymity holds)", { timeout: 15000 }, async () => {
   const hex = await sha1HexNode("password");
   const { prefix } = lib.splitHash(hex);
   assert.equal(prefix.length, 5);

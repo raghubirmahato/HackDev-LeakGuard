@@ -10,9 +10,8 @@ Part of the [HackDev](https://github.com/raghubirrajmahato15/raghubirrajmahato15
 
 ## How it works
 
-1. A content script detects password fields on the current page and classifies the page as a
-   **login**, **signup**, or **reset-password** flow (from the URL, title, nearby button/heading
-   text, and `autocomplete` attributes).
+1. A content script detects password fields on the current page, including fields added later by
+   single-page apps.
 2. As you type (debounced) or when the field loses focus, the password is hashed locally with
    `crypto.subtle.digest("SHA-1", ...)` — the plaintext password never leaves the tab.
 3. Only the first **5 hex characters** of that hash are sent to
@@ -20,7 +19,7 @@ Part of the [HackDev](https://github.com/raghubirrajmahato15/raghubirrajmahato15
    fetch). The API returns every known breached hash sharing that prefix (typically hundreds of
    candidates), and the extension checks locally whether the remaining 35 characters match.
 4. If a match is found, a small in-page warning banner appears next to the field, showing how many
-   breaches the password has appeared in. Nothing is ever displayed or transmitted about *which*
+   times the password has been seen in known breaches. Nothing is ever displayed or transmitted about *which*
    password it was beyond that.
 
 This is the same [k-anonymity model](https://www.troyhunt.com/ive-just-launched-pwned-passwords-v2/)
@@ -28,11 +27,14 @@ used by Chrome's and Firefox's own built-in breached-password warnings.
 
 ## Features
 
-- Detects login, signup, and reset-password pages automatically (no per-site configuration needed)
+- Runs on every website out of the box — no per-site setup or domain list needed
 - Works across dynamically-rendered / single-page-app forms via a `MutationObserver`
 - Color-coded severity (low / medium / high) based on breach frequency
 - Popup showing an on/off toggle and a running count of passwords checked / breaches flagged
-- Options page to whitelist specific domains
+  (the toggle takes effect in open tabs immediately)
+- Optional exclusion list on the options page for sites you want it to *skip* (bare domains,
+  wildcards like `*.example.com`, or pasted URLs are all accepted); leave it empty to check
+  everywhere
 - Zero telemetry, zero external analytics — the only network call is the HIBP range lookup
 
 ## Install (unpacked, for development/review)
@@ -51,10 +53,10 @@ used by Chrome's and Firefox's own built-in breached-password warnings.
 manifest.json     Extension manifest (MV3)
 background.js     Service worker — performs the HIBP range API fetch, caches responses
 content.js        Detects password fields, hashes input, shows the in-page warning banner
-pagelogic.js       Pure, DOM-free logic (classification, hashing helpers, risk scoring) — shared
-                   by content.js and the test suite so it can be unit-tested outside a browser
+pagelogic.js      Pure, DOM-free logic (classification, hashing helpers, risk scoring) — shared
+                  by content.js and the test suite so it can be unit-tested outside a browser
 popup.html/js      Toolbar popup UI (enable/disable, stats)
-options.html/js    Domain whitelist settings
+options.html/js    Optional list of sites to exclude
 tests/             Automated tests (see Testing below)
 test-fixtures/     Standalone HTML pages used to manually verify detection in a real browser
 ```
@@ -70,7 +72,7 @@ npm run test:live # adds a live integration test against the real HIBP API
 ```
 
 `tests/test_pagelogic.js` covers page-type classification, the SHA-1 → prefix/suffix split, risk
-bucketing, domain whitelisting, and debouncing — all pure functions, no network or browser needed.
+bucketing, domain whitelisting and normalization, and debouncing — all pure functions, no network or browser needed.
 
 `tests/test_hibp_integration.js` makes real calls to `api.pwnedpasswords.com` to confirm: a known
 breached password (`password`) is correctly found via the k-anonymity range lookup, a

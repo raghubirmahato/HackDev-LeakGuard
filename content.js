@@ -12,23 +12,39 @@
   if (!lib) return; // pagelogic.js failed to load; nothing we can safely do
 
   const DEBOUNCE_MS = 600;
+  const SCAN_DELAY_MS = 250;
+  const MIN_PASSWORD_LENGTH = 4;
+  const BANNER_HOST_ATTR = "data-hackdev-leakguard";
+
   const trackedFields = new WeakSet();
+  // field -> { seq, lastHash }. `seq` identifies the latest check so that slow or
+  // out-of-order responses for an older value never overwrite a newer result;
+  // `lastHash` is the hash the banner currently reflects, so re-checking the same
+  // value (e.g. on blur right after the debounced check) is skipped.
+  let fieldState = new WeakMap();
 
-  function collectTextSignals() {
-    const signals = [];
-    document.querySelectorAll("h1, h2, h3, button, [type=submit], label").forEach((el) => {
-      const text = (el.textContent || el.value || "").trim();
-      if (text && text.length < 80) signals.push(text);
+  let settings = { enabled: true, whitelist: [] };
+  let active = false;
+  let observer = null;
+  let scanScheduled = false;
+
+  // chrome.runtime.sendMessage throws synchronously once the extension has been
+  // reloaded or updated underneath an open tab, and reports "no receiver" style
+  // failures through lastError. Both are treated as "no response".
+  function send(message) {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(message, (response) => {
+          if (chrome.runtime.lastError) {
+            resolve(null);
+            return;
+          }
+          resolve(response);
+        });
+      } catch {
+        resolve(null);
+      }
     });
-    return signals;
-  }
-
-  function pageContext() {
-    const passwordFields = Array.from(document.querySelectorAll('input[type="password"]'));
-    const firstAutocomplete = passwordFields.length ? passwordFields[0].getAttribute("autocomplete") : null;
-    const guess = lib.classifyPageType(location.href, document.title, collectTextSignals());
-    const pageType = lib.refineClassification(guess, firstAutocomplete, passwordFields.length);
-    return { pageType, passwordFields };
   }
 
   async function sha1Hex(text) {
@@ -42,6 +58,7 @@
     let host = field.__hackdevBannerHost;
     if (host && host.isConnected) return host.shadowRoot.querySelector(".hd-banner");
     host = document.createElement("div");
+    host.setAttribute(BANNER_HOST_ATTR, "");
     host.style.all = "initial";
     field.insertAdjacentElement("afterend", host);
     const shadow = host.attachShadow({ mode: "open" });
@@ -71,24 +88,44 @@
   }
 
   function showBanner(field, level, message) {
-    const banner = ensureBanner(field);
     if (level === "safe" || !message) {
+      // Don't inject a banner host into the page just to keep it hidden.
+      const host = field.__hackdevBannerHost;
+      if (!host || !host.isConnected) return;
+      const banner = host.shadowRoot.querySelector(".hd-banner");
       banner.className = "hd-banner hidden";
       banner.textContent = "";
       return;
     }
+    const banner = ensureBanner(field);
     banner.className = `hd-banner ${level}`;
     banner.textContent = `⚠ HackDev LeakGuard: ${message}`;
   }
 
+  function getState(field) {
+    let state = fieldState.get(field);
+    if (!state) {
+      state = { seq: 0, lastHash: null };
+      fieldState.set(field, state);
+    }
+    return state;
+  }
+
   async function checkPassword(field) {
+    if (!active) return;
+    const state = getState(field);
+    const seq = ++state.seq;
+    const isCurrent = () => active && fieldState.get(field) === state && state.seq === seq;
+
     const value = field.value;
-    if (!value || value.length < 4) {
+    if (!value || value.length < MIN_PASSWORD_LENGTH) {
+      state.lastHash = null;
       showBanner(field, "safe", "");
       return;
     }
     const hex = await sha1Hex(value);
     if (!hex) return; // no WebCrypto available (e.g. insecure context) - fail silent, no warning shown
+    if (!isCurrent() || hex === state.lastHash) return;
 
     let split;
     try {
@@ -97,16 +134,18 @@
       return;
     }
 
-    chrome.runtime.sendMessage({ type: "checkPrefix", prefix: split.prefix }, (response) => {
-      if (chrome.runtime.lastError || !response || !response.ok) return;
-      chrome.runtime.sendMessage({ type: "recordCheck" });
-      const count = response.suffixes ? response.suffixes[split.suffix] : undefined;
-      const level = lib.riskLevel(count);
-      if (level !== "safe") {
-        chrome.runtime.sendMessage({ type: "recordBreach" });
-      }
-      showBanner(field, level, lib.riskMessage(level, count || 0));
-    });
+    const response = await send({ type: "checkPrefix", prefix: split.prefix });
+    if (!isCurrent()) return; // superseded by a newer value, or LeakGuard was switched off
+    if (!response || !response.ok) return;
+
+    state.lastHash = hex;
+    send({ type: "recordCheck" });
+    const count = response.suffixes ? response.suffixes[split.suffix] : undefined;
+    const level = lib.riskLevel(count);
+    if (level !== "safe") {
+      send({ type: "recordBreach" });
+    }
+    showBanner(field, level, lib.riskMessage(level, count || 0));
   }
 
   function attachField(field) {
@@ -118,21 +157,56 @@
   }
 
   function scanForFields() {
-    const { pageType, passwordFields } = pageContext();
-    if (pageType === "unknown" && passwordFields.length === 0) return;
-    passwordFields.forEach(attachField);
+    scanScheduled = false;
+    if (!active) return;
+    document.querySelectorAll('input[type="password"]').forEach(attachField);
+  }
+
+  // Mutations arrive in bursts on dynamic pages (and our own banners cause some),
+  // so coalesce them into at most one scan per SCAN_DELAY_MS.
+  function scheduleScan() {
+    if (scanScheduled) return;
+    scanScheduled = true;
+    setTimeout(scanForFields, SCAN_DELAY_MS);
+  }
+
+  function start() {
+    if (active) return;
+    active = true;
+    scanForFields();
+    observer = new MutationObserver(scheduleScan);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  function stop() {
+    if (!active) return;
+    active = false;
+    if (observer) observer.disconnect();
+    observer = null;
+    fieldState = new WeakMap(); // drops in-flight checks and remembered results
+    document.querySelectorAll(`[${BANNER_HOST_ATTR}]`).forEach((host) => host.remove());
+  }
+
+  function applySettings() {
+    const shouldRun = settings.enabled !== false && !lib.isWhitelisted(location.hostname, settings.whitelist);
+    if (shouldRun) start();
+    else stop();
   }
 
   async function init() {
-    const settings = await new Promise((resolve) =>
-      chrome.runtime.sendMessage({ type: "getSettings" }, (r) => resolve(r || { enabled: true, whitelist: [] }))
-    );
-    if (!settings.enabled) return;
-    if (lib.isWhitelisted(location.hostname, settings.whitelist)) return;
+    const response = await send({ type: "getSettings" });
+    if (response) settings = response;
+    applySettings();
 
-    scanForFields();
-    const observer = new MutationObserver(() => scanForFields());
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    // Pick up toggles from the popup / options page without requiring a reload.
+    if (chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== "sync") return;
+        if (changes.enabled) settings = { ...settings, enabled: changes.enabled.newValue !== false };
+        if (changes.whitelist) settings = { ...settings, whitelist: changes.whitelist.newValue || [] };
+        if (changes.enabled || changes.whitelist) applySettings();
+      });
+    }
   }
 
   if (document.readyState === "loading") {
