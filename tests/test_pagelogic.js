@@ -81,6 +81,22 @@ test("riskMessage produces a non-empty message for any breached level", () => {
   assert.match(lib.riskMessage("high", 999999), /do not use/i);
 });
 
+test("riskMessage pluralizes the breach count", () => {
+  assert.match(lib.riskMessage("low", 1), /seen once/);
+  assert.match(lib.riskMessage("low", 2), /seen 2 times/);
+});
+
+test("riskMessage advises changing an existing password on login pages", () => {
+  assert.match(lib.riskMessage("high", 50000, "login"), /change it/i);
+  assert.doesNotMatch(lib.riskMessage("high", 50000, "login"), /do not use/i);
+  assert.match(lib.riskMessage("medium", 500, "signup"), /choose a different one/i);
+});
+
+test("riskTitle gives a headline for breached levels only", () => {
+  assert.equal(lib.riskTitle("safe"), "");
+  for (const level of ["low", "medium", "high"]) assert.ok(lib.riskTitle(level).length > 0);
+});
+
 test("isWhitelisted matches exact host and subdomains, not unrelated domains", () => {
   const list = ["example.com"];
   assert.equal(lib.isWhitelisted("example.com", list), true);

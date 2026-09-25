@@ -99,16 +99,45 @@
     return "high";
   }
 
-  function riskMessage(level, count) {
+  /** Short headline for the warning banner. */
+  function riskTitle(level) {
     switch (level) {
       case "high":
-        return `This password has been seen ${count.toLocaleString()} times in known data breaches. Do not use it here.`;
+        return "This password is widely leaked";
       case "medium":
-        return `This password has been seen ${count.toLocaleString()} times in known data breaches. Choose a different one.`;
+        return "This password has been leaked";
       case "low":
-        return `This password has been seen ${count.toLocaleString()} time(s) in known data breaches. Consider a different one.`;
+        return "This password appeared in a data breach";
       default:
         return "";
+    }
+  }
+
+  function formatTimes(count) {
+    return count === 1 ? "once" : `${count.toLocaleString()} times`;
+  }
+
+  /**
+   * Explanation + advice for the warning banner. On a login page the password is
+   * the user's existing one, so the advice is to change it rather than pick another.
+   *
+   * @param {"high"|"medium"|"low"|"safe"} level
+   * @param {number} count
+   * @param {"signup"|"reset"|"login"|"unknown"} [pageType]
+   */
+  function riskMessage(level, count, pageType) {
+    if (level !== "high" && level !== "medium" && level !== "low") return "";
+    const seen = `It has been seen ${formatTimes(count)} in known data breaches.`;
+    if (pageType === "login") {
+      return `${seen} After signing in, change it here and anywhere else you use it.`;
+    }
+    switch (level) {
+      case "high":
+        return `${seen} Attackers try passwords like this first. Do not use it here.`;
+      case "medium":
+        return `${seen} Choose a different one.`;
+      default:
+        return `${seen} Consider a different one.`;
     }
   }
 
@@ -154,6 +183,7 @@
     bufferToHex,
     splitHash,
     riskLevel,
+    riskTitle,
     riskMessage,
     debounce,
     normalizeDomain,
