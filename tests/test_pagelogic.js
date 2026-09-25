@@ -78,18 +78,18 @@ test("riskMessage produces a non-empty message for any breached level", () => {
   assert.equal(lib.riskMessage("safe", 0), "");
   assert.match(lib.riskMessage("low", 5), /5/);
   assert.match(lib.riskMessage("medium", 500), /500/);
-  assert.match(lib.riskMessage("high", 999999), /do not use/i);
+  assert.match(lib.riskMessage("high", 999999), /don't use/i);
 });
 
 test("riskMessage pluralizes the breach count", () => {
-  assert.match(lib.riskMessage("low", 1), /seen once/);
-  assert.match(lib.riskMessage("low", 2), /seen 2 times/);
+  assert.match(lib.riskMessage("low", 1), /Seen once/);
+  assert.match(lib.riskMessage("low", 2), /Seen 2 times/);
 });
 
 test("riskMessage advises changing an existing password on login pages", () => {
   assert.match(lib.riskMessage("high", 50000, "login"), /change it/i);
-  assert.doesNotMatch(lib.riskMessage("high", 50000, "login"), /do not use/i);
-  assert.match(lib.riskMessage("medium", 500, "signup"), /choose a different one/i);
+  assert.doesNotMatch(lib.riskMessage("high", 50000, "login"), /don't use/i);
+  assert.match(lib.riskMessage("medium", 500, "signup"), /pick another/i);
 });
 
 test("riskTitle gives a headline for breached levels only", () => {

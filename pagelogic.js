@@ -99,18 +99,9 @@
     return "high";
   }
 
-  /** Short headline for the warning banner. */
+  /** Short headline for the warning banner (severity is conveyed by color). */
   function riskTitle(level) {
-    switch (level) {
-      case "high":
-        return "This password is widely leaked";
-      case "medium":
-        return "This password has been leaked";
-      case "low":
-        return "This password appeared in a data breach";
-      default:
-        return "";
-    }
+    return level === "high" || level === "medium" || level === "low" ? "Leaked password" : "";
   }
 
   function formatTimes(count) {
@@ -127,17 +118,15 @@
    */
   function riskMessage(level, count, pageType) {
     if (level !== "high" && level !== "medium" && level !== "low") return "";
-    const seen = `It has been seen ${formatTimes(count)} in known data breaches.`;
-    if (pageType === "login") {
-      return `${seen} After signing in, change it here and anywhere else you use it.`;
-    }
+    const seen = `Seen ${formatTimes(count)} in data breaches.`;
+    if (pageType === "login") return `${seen} Change it after signing in.`;
     switch (level) {
       case "high":
-        return `${seen} Attackers try passwords like this first. Do not use it here.`;
+        return `${seen} Don't use it.`;
       case "medium":
-        return `${seen} Choose a different one.`;
+        return `${seen} Pick another.`;
       default:
-        return `${seen} Consider a different one.`;
+        return `${seen} Consider another.`;
     }
   }
 

@@ -56,56 +56,51 @@
   }
 
   const SVG_NS = "http://www.w3.org/2000/svg";
-  const LEARN_MORE_URL = "https://haveibeenpwned.com/Passwords";
+  const PRIVACY_NOTE = "Checked privately by HackDev LeakGuard: only a 5-character hash prefix left your device.";
 
   const BANNER_CSS = `
     .hd-banner {
       box-sizing: border-box;
       display: flex;
       align-items: flex-start;
-      gap: 10px;
-      margin: 8px 0 12px;
-      padding: 10px 6px 10px 12px;
+      gap: 7px;
+      margin: 6px 0 10px;
+      padding: 6px 4px 6px 9px;
       border: 1px solid;
-      border-left-width: 4px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-      font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      border-left-width: 3px;
+      border-radius: 6px;
+      font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       text-align: left;
-      animation: hd-in 0.16s ease-out;
+      animation: hd-in 0.14s ease-out;
     }
     .hd-banner[hidden] { display: none; }
     .hd-banner.high { background: #fef2f2; border-color: #fecaca; border-left-color: #dc2626; color: #7f1d1d; }
     .hd-banner.medium { background: #fff7ed; border-color: #fed7aa; border-left-color: #ea580c; color: #7c2d12; }
     .hd-banner.low { background: #fefce8; border-color: #fde68a; border-left-color: #ca8a04; color: #713f12; }
-    .hd-icon { flex: none; width: 18px; height: 18px; margin-top: 1px; }
+    .hd-icon { flex: none; width: 15px; height: 15px; margin-top: 1px; }
     .high .hd-icon { color: #dc2626; }
     .medium .hd-icon { color: #ea580c; }
     .low .hd-icon { color: #ca8a04; }
-    .hd-body { flex: 1; min-width: 0; }
-    .hd-title { font-weight: 600; font-size: 13.5px; }
-    .hd-detail { margin-top: 2px; }
-    .hd-meta { margin-top: 6px; font-size: 11.5px; opacity: 0.8; }
-    .hd-meta a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+    .hd-text { flex: 1; min-width: 0; }
+    .hd-title { font-weight: 600; }
     .hd-close {
       flex: none;
       display: grid;
       place-items: center;
-      width: 24px;
-      height: 24px;
-      margin: -3px 0 0;
+      width: 18px;
+      height: 18px;
       padding: 0;
       border: 0;
-      border-radius: 6px;
+      border-radius: 4px;
       background: transparent;
       color: inherit;
-      font: 18px/1 system-ui, sans-serif;
-      opacity: 0.6;
+      font: 15px/1 system-ui, sans-serif;
+      opacity: 0.55;
       cursor: pointer;
     }
     .hd-close:hover { opacity: 1; background: rgba(0, 0, 0, 0.06); }
     .hd-close:focus-visible { opacity: 1; outline: 2px solid currentColor; outline-offset: 1px; }
-    @keyframes hd-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+    @keyframes hd-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { .hd-banner { animation: none; } }
   `;
 
@@ -152,16 +147,11 @@
     const root = el("div", "hd-banner");
     root.hidden = true;
     root.setAttribute("role", "alert");
-    const title = el("div", "hd-title");
-    const detail = el("div", "hd-detail");
-    const meta = el("div", "hd-meta", "Checked privately by LeakGuard \u00b7 ");
-    const link = el("a", "", "Learn more");
-    link.href = LEARN_MORE_URL;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    meta.appendChild(link);
-    const body = el("div", "hd-body");
-    body.append(title, detail, meta);
+    root.title = PRIVACY_NOTE;
+    const title = el("span", "hd-title");
+    const detail = el("span", "hd-detail");
+    const body = el("div", "hd-text");
+    body.append(title, " ", detail);
     const close = el("button", "hd-close", "\u00d7");
     close.type = "button";
     close.title = "Dismiss";
@@ -197,7 +187,7 @@
     banner.detail.textContent = message;
     // Line up with the field rather than stretching across wide containers.
     const width = field.getBoundingClientRect().width;
-    banner.root.style.maxWidth = `${Math.min(Math.max(width, 300), 480)}px`;
+    banner.root.style.maxWidth = `${Math.min(Math.max(width, 240), 420)}px`;
     banner.root.hidden = false;
   }
 
