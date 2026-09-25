@@ -22,8 +22,6 @@ Part of the [HackDev](https://github.com/raghubirrajmahato15/raghubirrajmahato15
    times the password has been seen in known breaches. Nothing is ever displayed or transmitted about *which*
    password it was beyond that.
 
-This is the same [k-anonymity model](https://www.troyhunt.com/ive-just-launched-pwned-passwords-v2/)
-used by Chrome's and Firefox's own built-in breached-password warnings.
 
 ## Features
 
