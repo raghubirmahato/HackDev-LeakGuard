@@ -17,10 +17,11 @@
   const BANNER_HOST_ATTR = "data-hackdev-leakguard";
 
   const trackedFields = new WeakSet();
-  // field -> { seq, lastHash }. `seq` identifies the latest check so that slow or
-  // out-of-order responses for an older value never overwrite a newer result;
-  // `lastHash` is the hash the banner currently reflects, so re-checking the same
-  // value (e.g. on blur right after the debounced check) is skipped.
+  // field -> { seq, lastHash, dismissedHash }. `seq` identifies the latest check so
+  // that slow or out-of-order responses for an older value never overwrite a newer
+  // result; `lastHash` is the hash the banner currently reflects, so re-checking the
+  // same value (e.g. on blur right after the debounced check) is skipped;
+  // `dismissedHash` is a password the user closed the warning for.
   let fieldState = new WeakMap();
 
   let settings = { enabled: true, whitelist: [] };
@@ -54,58 +55,165 @@
     return lib.bufferToHex(digest);
   }
 
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const PRIVACY_NOTE = "Checked privately by HackDev LeakGuard: only a 5-character hash prefix left your device.";
+
+  const BANNER_CSS = `
+    .hd-banner {
+      box-sizing: border-box;
+      display: flex;
+      align-items: flex-start;
+      gap: 7px;
+      margin: 6px 0 10px;
+      padding: 6px 4px 6px 9px;
+      border: 1px solid;
+      border-left-width: 3px;
+      border-radius: 6px;
+      font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      text-align: left;
+      animation: hd-in 0.14s ease-out;
+    }
+    .hd-banner[hidden] { display: none; }
+    .hd-banner.high { background: #fef2f2; border-color: #fecaca; border-left-color: #dc2626; color: #7f1d1d; }
+    .hd-banner.medium { background: #fff7ed; border-color: #fed7aa; border-left-color: #ea580c; color: #7c2d12; }
+    .hd-banner.low { background: #fefce8; border-color: #fde68a; border-left-color: #ca8a04; color: #713f12; }
+    .hd-icon { flex: none; width: 15px; height: 15px; margin-top: 1px; }
+    .high .hd-icon { color: #dc2626; }
+    .medium .hd-icon { color: #ea580c; }
+    .low .hd-icon { color: #ca8a04; }
+    .hd-text { flex: 1; min-width: 0; }
+    .hd-title { font-weight: 600; }
+    .hd-close {
+      flex: none;
+      display: grid;
+      place-items: center;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      font: 15px/1 system-ui, sans-serif;
+      opacity: 0.55;
+      cursor: pointer;
+    }
+    .hd-close:hover { opacity: 1; background: rgba(0, 0, 0, 0.06); }
+    .hd-close:focus-visible { opacity: 1; outline: 2px solid currentColor; outline-offset: 1px; }
+    @keyframes hd-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .hd-banner { animation: none; } }
+  `;
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  // Built with DOM APIs rather than innerHTML so it also works on pages that
+  // enforce Trusted Types.
+  function warningIcon() {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("class", "hd-icon");
+    svg.setAttribute("viewBox", "0 0 20 20");
+    svg.setAttribute("aria-hidden", "true");
+    const triangle = document.createElementNS(SVG_NS, "path");
+    triangle.setAttribute("fill", "currentColor");
+    triangle.setAttribute("d", "M8.68 2.79a1.5 1.5 0 0 1 2.64 0l6.9 12.47a1.5 1.5 0 0 1-1.32 2.24H3.1a1.5 1.5 0 0 1-1.32-2.24l6.9-12.47Z");
+    const mark = document.createElementNS(SVG_NS, "path");
+    mark.setAttribute("stroke", "#fff");
+    mark.setAttribute("stroke-width", "1.8");
+    mark.setAttribute("stroke-linecap", "round");
+    mark.setAttribute("d", "M10 7.3v4.2M10 14.4v.1");
+    svg.append(triangle, mark);
+    return svg;
+  }
+
   function ensureBanner(field) {
-    let host = field.__hackdevBannerHost;
-    if (host && host.isConnected) return host.shadowRoot.querySelector(".hd-banner");
-    host = document.createElement("div");
+    const existing = field.__hackdevBanner;
+    if (existing && existing.host.isConnected) return existing;
+
+    const host = document.createElement("div");
     host.setAttribute(BANNER_HOST_ATTR, "");
-    host.style.all = "initial";
+    // Isolate from page CSS, and be a block so following content (e.g. a
+    // "Forgot password?" link) is pushed below the banner instead of overlapping it.
+    host.style.cssText = "all: initial; display: block;";
     field.insertAdjacentElement("afterend", host);
     const shadow = host.attachShadow({ mode: "open" });
-    const style = document.createElement("style");
-    style.textContent = `
-      .hd-banner {
-        font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif;
-        margin-top: 6px;
-        padding: 8px 10px;
-        border-radius: 6px;
-        display: flex;
-        align-items: flex-start;
-        gap: 6px;
-        max-width: 420px;
-      }
-      .hd-banner.high { background: #fdecea; color: #7a271a; border: 1px solid #f5b5ac; }
-      .hd-banner.medium { background: #fff4e5; color: #7a4a00; border: 1px solid #f7c98b; }
-      .hd-banner.low { background: #fff9e6; color: #6b5900; border: 1px solid #f0e29a; }
-      .hd-banner.hidden { display: none; }
-    `;
-    const banner = document.createElement("div");
-    banner.className = "hd-banner hidden";
-    shadow.appendChild(style);
-    shadow.appendChild(banner);
-    field.__hackdevBannerHost = host;
+
+    const style = el("style");
+    style.textContent = BANNER_CSS;
+    const root = el("div", "hd-banner");
+    root.hidden = true;
+    root.setAttribute("role", "alert");
+    root.title = PRIVACY_NOTE;
+    const title = el("span", "hd-title");
+    const detail = el("span", "hd-detail");
+    const body = el("div", "hd-text");
+    body.append(title, " ", detail);
+    const close = el("button", "hd-close", "\u00d7");
+    close.type = "button";
+    close.title = "Dismiss";
+    close.setAttribute("aria-label", "Dismiss warning");
+    // Keep focus in the password field so dismissing doesn't interrupt typing.
+    close.addEventListener("mousedown", (e) => e.preventDefault());
+    close.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const state = fieldState.get(field);
+      if (state) state.dismissedHash = state.lastHash;
+      hideBanner(field);
+    });
+    root.append(warningIcon(), body, close);
+    shadow.append(style, root);
+
+    const banner = { host, root, title, detail };
+    field.__hackdevBanner = banner;
     return banner;
   }
 
-  function showBanner(field, level, message) {
-    if (level === "safe" || !message) {
-      // Don't inject a banner host into the page just to keep it hidden.
-      const host = field.__hackdevBannerHost;
-      if (!host || !host.isConnected) return;
-      const banner = host.shadowRoot.querySelector(".hd-banner");
-      banner.className = "hd-banner hidden";
-      banner.textContent = "";
-      return;
-    }
+  function hideBanner(field) {
+    // Don't inject a banner host into the page just to keep it hidden.
+    const banner = field.__hackdevBanner;
+    if (!banner || !banner.host.isConnected) return;
+    banner.root.hidden = true;
+  }
+
+  function showBanner(field, level, title, message) {
     const banner = ensureBanner(field);
-    banner.className = `hd-banner ${level}`;
-    banner.textContent = `⚠ HackDev LeakGuard: ${message}`;
+    banner.root.className = `hd-banner ${level}`;
+    banner.title.textContent = title;
+    banner.detail.textContent = message;
+    // Line up with the field rather than stretching across wide containers.
+    const width = field.getBoundingClientRect().width;
+    banner.root.style.maxWidth = `${Math.min(Math.max(width, 240), 420)}px`;
+    banner.root.hidden = false;
+  }
+
+  function collectTextSignals() {
+    const signals = [];
+    document.querySelectorAll("h1, h2, h3, button, [type=submit], label").forEach((node) => {
+      const text = (node.textContent || node.value || "").trim();
+      if (text && text.length < 80) signals.push(text);
+    });
+    return signals;
+  }
+
+  // Only computed when a warning is about to be shown, so it costs nothing on
+  // the vast majority of page updates.
+  function pageTypeFor(field) {
+    const autocomplete = (field.getAttribute("autocomplete") || "").toLowerCase();
+    if (autocomplete.includes("current-password")) return "login";
+    if (autocomplete.includes("new-password")) return "signup";
+    const guess = lib.classifyPageType(location.href, document.title, collectTextSignals());
+    return lib.refineClassification(guess, null, document.querySelectorAll('input[type="password"]').length);
   }
 
   function getState(field) {
     let state = fieldState.get(field);
     if (!state) {
-      state = { seq: 0, lastHash: null };
+      state = { seq: 0, lastHash: null, dismissedHash: null };
       fieldState.set(field, state);
     }
     return state;
@@ -120,7 +228,7 @@
     const value = field.value;
     if (!value || value.length < MIN_PASSWORD_LENGTH) {
       state.lastHash = null;
-      showBanner(field, "safe", "");
+      hideBanner(field);
       return;
     }
     const hex = await sha1Hex(value);
@@ -145,7 +253,11 @@
     if (level !== "safe") {
       send({ type: "recordBreach" });
     }
-    showBanner(field, level, lib.riskMessage(level, count || 0));
+    if (level === "safe" || hex === state.dismissedHash) {
+      hideBanner(field);
+      return;
+    }
+    showBanner(field, level, lib.riskTitle(level), lib.riskMessage(level, count, pageTypeFor(field)));
   }
 
   function attachField(field) {

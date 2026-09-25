@@ -29,7 +29,9 @@ used by Chrome's and Firefox's own built-in breached-password warnings.
 
 - Runs on every website out of the box — no per-site setup or domain list needed
 - Works across dynamically-rendered / single-page-app forms via a `MutationObserver`
-- Color-coded severity (low / medium / high) based on breach frequency
+- Color-coded severity (low / medium / high) based on breach frequency, with advice that fits the
+  page: on a login form it tells you to change the password, on signup/reset to pick another
+- Dismissible warning that stays out of the page's way (it won't come back for the same password)
 - Popup showing an on/off toggle and a running count of passwords checked / breaches flagged
   (the toggle takes effect in open tabs immediately)
 - Optional exclusion list on the options page for sites you want it to *skip* (bare domains,
