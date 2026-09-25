@@ -1,4 +1,4 @@
-// Pure-logic unit tests for pagelogic.js. Run with: node --test tests/
+// Pure-logic unit tests for pagelogic.js. Run with: npm test
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -87,6 +87,22 @@ test("isWhitelisted matches exact host and subdomains, not unrelated domains", (
   assert.equal(lib.isWhitelisted("app.example.com", list), true);
   assert.equal(lib.isWhitelisted("notexample.com", list), false);
   assert.equal(lib.isWhitelisted("example.com.evil.com", list), false);
+});
+
+test("normalizeDomain reduces URLs, ports, and wildcards to a bare hostname", () => {
+  assert.equal(lib.normalizeDomain("  Example.COM "), "example.com");
+  assert.equal(lib.normalizeDomain("https://app.example.com:8443/login?next=/"), "app.example.com");
+  assert.equal(lib.normalizeDomain("http://user@intranet.local/"), "intranet.local");
+  assert.equal(lib.normalizeDomain("*.example.com"), "example.com");
+  assert.equal(lib.normalizeDomain("example.com."), "example.com");
+  assert.equal(lib.normalizeDomain(""), "");
+});
+
+test("isWhitelisted accepts whitelist entries written as full URLs or wildcards", () => {
+  assert.equal(lib.isWhitelisted("app.example.com", ["https://example.com/"]), true);
+  assert.equal(lib.isWhitelisted("app.example.com", ["*.example.com"]), true);
+  assert.equal(lib.isWhitelisted("example.com", ["http://example.com:8080"]), true);
+  assert.equal(lib.isWhitelisted("other.com", ["https://example.com/"]), false);
 });
 
 test("debounce collapses rapid calls into a single trailing invocation", async () => {

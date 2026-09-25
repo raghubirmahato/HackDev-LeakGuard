@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "HackDev LeakGuard",
   "version": "1.0.0",
-  "description": "Warns you in real time if a password you type on a login, signup, or reset-password page has appeared in a known data breach. Uses the free HaveIBeenPwned k-anonymity API - your password never leaves your device.",
+  "description": "Warns you in real time if a password you type has appeared in a known data breach. Your password never leaves your device.",
   "permissions": ["storage"],
   "host_permissions": ["https://api.pwnedpasswords.com/*"],
   "background": {
@@ -11,7 +11,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["pagelogic.js", "content.js"],
       "run_at": "document_idle",
       "all_frames": true
     }

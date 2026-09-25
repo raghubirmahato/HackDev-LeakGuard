@@ -14,6 +14,10 @@ window.chrome = {
             const res = await fetch(`https://api.pwnedpasswords.com/range/${message.prefix}`, {
               headers: { "Add-Padding": "true" },
             });
+            if (!res.ok) {
+              callback({ ok: false, error: `HIBP API returned HTTP ${res.status}` });
+              return;
+            }
             const text = await res.text();
             const suffixes = {};
             for (const line of text.split("\n")) {
@@ -41,5 +45,6 @@ window.chrome = {
   storage: {
     sync: { get: async () => ({}), set: async () => {} },
     local: { get: async () => ({}), set: async () => {} },
+    onChanged: { addListener() {} },
   },
 };

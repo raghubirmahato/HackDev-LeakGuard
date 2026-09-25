@@ -102,11 +102,11 @@
   function riskMessage(level, count) {
     switch (level) {
       case "high":
-        return `This password has appeared in ${count.toLocaleString()} known data breaches. Do not use it here.`;
+        return `This password has been seen ${count.toLocaleString()} times in known data breaches. Do not use it here.`;
       case "medium":
-        return `This password has appeared in ${count.toLocaleString()} known data breaches. Choose a different one.`;
+        return `This password has been seen ${count.toLocaleString()} times in known data breaches. Choose a different one.`;
       case "low":
-        return `This password has appeared in ${count.toLocaleString()} known data breach(es). Consider a different one.`;
+        return `This password has been seen ${count.toLocaleString()} time(s) in known data breaches. Consider a different one.`;
       default:
         return "";
     }
@@ -121,12 +121,28 @@
     };
   }
 
+  /**
+   * Reduce a user-entered whitelist entry to a bare hostname, so that pasting a
+   * full URL ("https://app.example.com:8443/login") or a wildcard ("*.example.com")
+   * still matches the page's `location.hostname`.
+   */
+  function normalizeDomain(entry) {
+    let d = String(entry || "").trim().toLowerCase();
+    d = d.replace(/^[a-z][a-z0-9+.-]*:\/\//, ""); // scheme
+    d = d.split(/[/?#]/)[0]; // path, query, fragment
+    d = d.replace(/^[^@]*@/, ""); // userinfo
+    d = d.replace(/:\d*$/, ""); // port
+    d = d.replace(/^\*\./, ""); // wildcard (subdomains already match)
+    d = d.replace(/\.$/, ""); // trailing dot of a fully-qualified name
+    return d;
+  }
+
   /** Check whether a hostname matches any entry in a whitelist (exact or subdomain match). */
   function isWhitelisted(hostname, whitelist) {
     if (!hostname || !Array.isArray(whitelist)) return false;
-    const host = hostname.toLowerCase();
+    const host = hostname.toLowerCase().replace(/\.$/, "");
     return whitelist.some((entry) => {
-      const w = String(entry || "").toLowerCase().trim();
+      const w = normalizeDomain(entry);
       if (!w) return false;
       return host === w || host.endsWith(`.${w}`);
     });
@@ -140,6 +156,7 @@
     riskLevel,
     riskMessage,
     debounce,
+    normalizeDomain,
     isWhitelisted,
   };
 

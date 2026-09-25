@@ -8,6 +8,8 @@ const FETCH_TIMEOUT_MS = 6000;
 // In-memory cache of prefix -> { suffixes: Map<suffix, count>, fetchedAt: number }
 const prefixCache = new Map();
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_CACHE_ENTRIES = 100;
+const PREFIX_RE = /^[0-9A-F]{5}$/i;
 
 async function fetchWithTimeout(url, options, timeoutMs) {
   const controller = new AbortController();
@@ -36,6 +38,9 @@ function parseRangeResponse(text) {
 }
 
 async function checkPrefix(prefix) {
+  if (typeof prefix !== "string" || !PREFIX_RE.test(prefix)) {
+    return { ok: false, error: "Invalid hash prefix" };
+  }
   const normalizedPrefix = prefix.toUpperCase();
   const cached = prefixCache.get(normalizedPrefix);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
@@ -53,7 +58,12 @@ async function checkPrefix(prefix) {
     }
     const text = await response.text();
     const suffixes = parseRangeResponse(text);
+    prefixCache.delete(normalizedPrefix);
     prefixCache.set(normalizedPrefix, { suffixes, fetchedAt: Date.now() });
+    if (prefixCache.size > MAX_CACHE_ENTRIES) {
+      // Maps iterate in insertion order, so the first key is the oldest entry.
+      prefixCache.delete(prefixCache.keys().next().value);
+    }
     return { ok: true, suffixes: Object.fromEntries(suffixes) };
   } catch (err) {
     const message = err && err.name === "AbortError" ? "HIBP request timed out" : String(err && err.message ? err.message : err);
@@ -61,12 +71,20 @@ async function checkPrefix(prefix) {
   }
 }
 
-async function bumpStat(key, delta) {
-  const stored = await chrome.storage.local.get(["stats"]);
-  const stats = stored.stats || { checked: 0, breached: 0 };
-  stats[key] = (stats[key] || 0) + delta;
-  await chrome.storage.local.set({ stats });
-  return stats;
+// Stat updates are read-modify-write on chrome.storage, so they are chained to
+// run one at a time; otherwise concurrent messages would overwrite each other.
+let statsQueue = Promise.resolve();
+
+function bumpStat(key, delta) {
+  const run = statsQueue.then(async () => {
+    const stored = await chrome.storage.local.get(["stats"]);
+    const stats = stored.stats || { checked: 0, breached: 0 };
+    stats[key] = (stats[key] || 0) + delta;
+    await chrome.storage.local.set({ stats });
+    return stats;
+  });
+  statsQueue = run.catch(() => {});
+  return run;
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -78,23 +96,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "recordCheck") {
-    bumpStat("checked", 1).then(() => sendResponse({ ok: true }));
+    bumpStat("checked", 1).then(
+      () => sendResponse({ ok: true }),
+      () => sendResponse({ ok: false })
+    );
     return true;
   }
 
   if (message.type === "recordBreach") {
-    bumpStat("breached", 1).then(() => sendResponse({ ok: true }));
+    bumpStat("breached", 1).then(
+      () => sendResponse({ ok: true }),
+      () => sendResponse({ ok: false })
+    );
     return true;
   }
 
   if (message.type === "getSettings") {
     chrome.storage.sync
       .get(["enabled", "whitelist"])
-      .then((stored) =>
-        sendResponse({
-          enabled: stored.enabled !== false,
-          whitelist: stored.whitelist || [],
-        })
+      .then(
+        (stored) =>
+          sendResponse({
+            enabled: stored.enabled !== false,
+            whitelist: stored.whitelist || [],
+          }),
+        () => sendResponse({ enabled: true, whitelist: [] })
       );
     return true;
   }
@@ -104,7 +130,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === "install") {
-    await chrome.storage.sync.set({ enabled: true, whitelist: [] });
+    // storage.sync may already hold settings synced from another device; only
+    // fill in what's missing instead of overwriting them.
+    const synced = await chrome.storage.sync.get(["enabled", "whitelist"]);
+    const defaults = {};
+    if (synced.enabled === undefined) defaults.enabled = true;
+    if (synced.whitelist === undefined) defaults.whitelist = [];
+    if (Object.keys(defaults).length) await chrome.storage.sync.set(defaults);
     await chrome.storage.local.set({ stats: { checked: 0, breached: 0 } });
   }
 });

@@ -16,13 +16,16 @@
 <body>
   <h1>HackDev LeakGuard Settings</h1>
 
-  <label for="whitelist"><strong>Whitelisted domains</strong></label>
-  <p class="hint">One domain per line (e.g. <code>internal-tool.example.com</code>). LeakGuard will not run on these sites.</p>
-  <textarea id="whitelist" placeholder="internal-tool.example.com"></textarea>
+  <p>LeakGuard checks password fields on <strong>every website</strong> automatically &mdash; you don't need to add anything here.</p>
+
+  <label for="whitelist"><strong>Excluded sites (optional)</strong></label>
+  <p class="hint">Only list sites you want LeakGuard to <em>skip</em>, one per line (e.g. <code>internal-tool.example.com</code>). Subdomains are skipped too. Leave this empty to check everywhere.</p>
+  <textarea id="whitelist" placeholder="Leave empty to check every site"></textarea>
   <br />
   <button id="save">Save</button>
   <span id="saved" style="display:none;">Saved</span>
 
+  <script src="pagelogic.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

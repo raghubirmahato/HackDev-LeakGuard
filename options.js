@@ -8,11 +8,11 @@ async function load() {
 }
 
 saveBtn.addEventListener("click", async () => {
-  const whitelist = textarea.value
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // Store bare hostnames (a pasted "https://example.com/login" becomes "example.com").
+  const normalized = textarea.value.split("\n").map(self.HackDevLeakGuard.normalizeDomain).filter(Boolean);
+  const whitelist = Array.from(new Set(normalized));
   await chrome.storage.sync.set({ whitelist });
+  textarea.value = whitelist.join("\n");
   savedLabel.style.display = "inline";
   setTimeout(() => (savedLabel.style.display = "none"), 1500);
 });
